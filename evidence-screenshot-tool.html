@@ -1,0 +1,694 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Evidence Screenshot Tool</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    :root {
+      --blue: #0078d4; --blue-dk: #005fa3; --blue-lt: #e8f3fc;
+      --green: #107c10; --green-lt: #e6f4ea; --red: #c4262e;
+      --bg: #f3f2f1; --surface: #fff;
+      --border: #e0e0e0; --text: #1a1a1a; --muted: #666;
+    }
+    html, body { height: 100%; font-family: 'Segoe UI', system-ui, sans-serif; font-size: 14px; color: var(--text); background: var(--bg); }
+
+    .screen { display: none; }
+    .screen.active { display: flex; }
+
+    /* ── Welcome ── */
+    #welcome-screen { min-height: 100vh; flex-direction: column; align-items: center; justify-content: center; padding: 40px 20px; }
+    .welcome-card {
+      background: var(--surface); border-radius: 12px; max-width: 560px; width: 100%;
+      box-shadow: 0 2px 20px rgba(0,0,0,0.08);
+    }
+    .welcome-header {
+      background: var(--blue); border-radius: 12px 12px 0 0; padding: 20px 24px;
+      display: flex; align-items: center; justify-content: space-between; color: #fff;
+    }
+    .welcome-header-left { display: flex; align-items: center; gap: 12px; }
+    .welcome-header-icon { font-size: 28px; }
+    .welcome-header-title { font-size: 18px; font-weight: 700; }
+    .welcome-header-sub { font-size: 12px; opacity: 0.85; margin-top: 2px; }
+    #settings-btn {
+      background: rgba(255,255,255,0.15); border: 1px solid rgba(255,255,255,0.3);
+      color: #fff; border-radius: 6px; padding: 6px 12px; cursor: pointer;
+      font-size: 12px; font-family: inherit; white-space: nowrap; transition: background 0.15s;
+    }
+    #settings-btn:hover { background: rgba(255,255,255,0.25); }
+    .welcome-body { padding: 28px 28px 24px; text-align: center; }
+    .welcome-sub { color: var(--muted); margin-bottom: 24px; line-height: 1.6; font-size: 13px; }
+    .steps { display: flex; gap: 12px; margin-bottom: 24px; text-align: left; }
+    .step { flex: 1; background: var(--bg); border-radius: 8px; padding: 14px; }
+    .step-num { width: 24px; height: 24px; background: var(--blue); color: #fff; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 11px; font-weight: 700; margin-bottom: 8px; }
+    .step-label { font-size: 12px; font-weight: 600; margin-bottom: 4px; }
+    .step-desc { font-size: 11px; color: var(--muted); line-height: 1.5; }
+
+    /* Flow status banner */
+    #flow-status-banner {
+      margin: 0 0 20px; padding: 10px 14px; border-radius: 8px; font-size: 12px; line-height: 1.5;
+      display: none;
+    }
+    #flow-status-banner.not-configured { background: #fff8e1; border-left: 3px solid #f9a825; color: #555; }
+    #flow-status-banner.configured     { background: var(--green-lt); border-left: 3px solid var(--green); color: #1a1a1a; }
+
+    /* Buttons */
+    .btn-primary {
+      display: inline-flex; align-items: center; justify-content: center; gap: 8px;
+      background: var(--blue); color: #fff; border: none; border-radius: 6px;
+      padding: 12px 28px; font-size: 15px; font-weight: 600;
+      cursor: pointer; font-family: inherit; transition: background 0.15s; width: 100%;
+    }
+    .btn-primary:hover { background: var(--blue-dk); }
+    .btn-primary:disabled { opacity: 0.5; cursor: not-allowed; }
+    .btn-secondary {
+      display: inline-flex; align-items: center; justify-content: center; gap: 7px;
+      background: var(--bg); color: var(--text); border: 1px solid var(--border);
+      border-radius: 6px; padding: 10px 16px; font-size: 13px; font-weight: 500;
+      cursor: pointer; font-family: inherit; transition: background 0.15s;
+    }
+    .btn-secondary:hover { background: #ddd; }
+    .btn-green {
+      display: inline-flex; align-items: center; justify-content: center; gap: 7px;
+      background: var(--green); color: #fff; border: none; border-radius: 6px;
+      padding: 10px 16px; font-size: 13px; font-weight: 600;
+      cursor: pointer; font-family: inherit; transition: background 0.15s;
+    }
+    .btn-green:hover { background: #0a5e0a; }
+    .btn-green:disabled { opacity: 0.5; cursor: not-allowed; }
+    .tip { margin-top: 14px; font-size: 11px; color: #999; }
+
+    /* ── Settings modal ── */
+    #settings-modal {
+      display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.5);
+      z-index: 99998; align-items: center; justify-content: center; padding: 20px;
+    }
+    #settings-modal.open { display: flex; }
+    .settings-box {
+      background: var(--surface); border-radius: 12px; max-width: 520px; width: 100%;
+      box-shadow: 0 8px 40px rgba(0,0,0,0.2);
+    }
+    .settings-header {
+      padding: 18px 22px; border-bottom: 1px solid var(--border);
+      display: flex; align-items: center; justify-content: space-between;
+    }
+    .settings-header h2 { font-size: 16px; font-weight: 600; }
+    .settings-close { background: none; border: none; font-size: 20px; cursor: pointer; color: var(--muted); line-height: 1; }
+    .settings-body { padding: 22px; }
+    .field { margin-bottom: 18px; }
+    .field label { display: block; font-size: 13px; font-weight: 600; margin-bottom: 6px; }
+    .field input {
+      width: 100%; padding: 9px 12px; border: 1px solid var(--border); border-radius: 6px;
+      font-family: inherit; font-size: 13px; color: var(--text);
+      transition: border-color 0.15s;
+    }
+    .field input:focus { outline: none; border-color: var(--blue); box-shadow: 0 0 0 2px rgba(0,120,212,0.15); }
+    .field-hint { font-size: 11px; color: var(--muted); margin-top: 5px; line-height: 1.6; }
+    .field-hint code { background: var(--bg); padding: 1px 5px; border-radius: 3px; font-size: 11px; font-family: monospace; }
+    .settings-note {
+      background: var(--blue-lt); border-radius: 8px; padding: 12px 14px;
+      font-size: 12px; color: #1a1a1a; line-height: 1.6; margin-bottom: 18px;
+    }
+    .settings-footer { padding: 16px 22px; border-top: 1px solid var(--border); display: flex; gap: 10px; justify-content: flex-end; }
+
+    /* ── Selection ── */
+    #selection-screen { position: fixed; inset: 0; background: #000; z-index: 9999; flex-direction: column; }
+    #sel-canvas { position: absolute; inset: 0; cursor: crosshair; }
+    #sel-hint {
+      position: fixed; top: 14px; left: 50%; transform: translateX(-50%);
+      background: rgba(0,0,0,0.72); color: #fff; padding: 8px 20px; border-radius: 20px;
+      font-size: 13px; font-weight: 500; pointer-events: none; z-index: 10000;
+      white-space: nowrap; box-shadow: 0 2px 12px rgba(0,0,0,0.4);
+    }
+    #sel-dims {
+      position: fixed; pointer-events: none; z-index: 10000; display: none;
+      background: var(--blue); color: #fff; padding: 3px 8px; border-radius: 4px;
+      font-size: 11px; font-family: 'Courier New', monospace;
+    }
+
+    /* ── Result ── */
+    #result-screen { min-height: 100vh; flex-direction: column; align-items: center; padding: 32px 20px; background: var(--bg); }
+    .result-card { max-width: 740px; width: 100%; background: var(--surface); border-radius: 12px; overflow: hidden; box-shadow: 0 2px 20px rgba(0,0,0,0.08); }
+    .result-header { padding: 18px 24px; border-bottom: 1px solid var(--border); display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+    .result-title { font-size: 15px; font-weight: 600; }
+    .result-meta { font-size: 12px; color: var(--muted); margin-top: 2px; }
+    .result-img-wrap { background: #e8e8e8; text-align: center; }
+    .result-img-wrap img { display: block; max-width: 100%; max-height: 400px; margin: 0 auto; }
+    .result-actions { padding: 16px 20px; border-top: 1px solid var(--border); display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+    .result-actions .btn-primary { flex: none; width: auto; font-size: 13px; padding: 9px 18px; }
+    .result-actions .btn-secondary { font-size: 13px; padding: 9px 14px; }
+    .result-actions .btn-green { padding: 9px 18px; }
+
+    /* SharePoint link result */
+    #sp-link-row {
+      padding: 12px 20px; background: var(--green-lt); border-top: 1px solid #c3e6cb;
+      display: none; align-items: center; gap: 10px; flex-wrap: wrap;
+    }
+    #sp-link-row.show { display: flex; }
+    #sp-link-row .sp-link-label { font-size: 12px; font-weight: 600; color: var(--green); white-space: nowrap; }
+    #sp-link-text {
+      flex: 1; min-width: 0; padding: 6px 10px; border: 1px solid #a8d5b0; border-radius: 5px;
+      background: #fff; font-size: 11px; font-family: monospace; color: var(--text);
+      overflow: hidden; text-overflow: ellipsis; white-space: nowrap; cursor: text;
+    }
+    #sp-copy-link-btn {
+      background: var(--green); color: #fff; border: none; border-radius: 5px;
+      padding: 6px 14px; font-size: 12px; font-weight: 600; cursor: pointer;
+      font-family: inherit; white-space: nowrap; transition: background 0.15s;
+    }
+    #sp-copy-link-btn:hover { background: #0a5e0a; }
+
+    /* Upload progress */
+    #sp-uploading {
+      padding: 10px 20px; background: #f0f8ff; border-top: 1px solid #cce0f5;
+      font-size: 12px; color: var(--blue); display: none; align-items: center; gap: 8px;
+    }
+    #sp-uploading.show { display: flex; }
+    .spinner { width: 14px; height: 14px; border: 2px solid var(--blue-lt); border-top-color: var(--blue); border-radius: 50%; animation: spin 0.7s linear infinite; flex-shrink: 0; }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    /* Upload error */
+    #sp-error {
+      padding: 10px 20px; background: #fce8e6; border-top: 1px solid #f5c6c2;
+      font-size: 12px; color: var(--red); display: none; align-items: center; gap: 8px; flex-wrap: wrap;
+    }
+    #sp-error.show { display: flex; }
+    #sp-error-msg { flex: 1; }
+
+    /* ── Gallery ── */
+    #gallery-section { max-width: 740px; width: 100%; margin-top: 24px; display: none; }
+    .gallery-bar { display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px; }
+    .gallery-label { font-size: 12px; font-weight: 600; color: var(--muted); text-transform: uppercase; letter-spacing: 0.5px; }
+    #gal-clear { font-size: 12px; color: var(--red); background: none; border: none; cursor: pointer; font-family: inherit; }
+    #gal-clear:hover { text-decoration: underline; }
+    #gallery-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 10px; }
+    .gal-item { background: var(--surface); border: 1px solid var(--border); border-radius: 8px; overflow: hidden; transition: box-shadow 0.15s, transform 0.15s; }
+    .gal-item:hover { box-shadow: 0 4px 14px rgba(0,0,0,0.12); transform: translateY(-2px); }
+    .gal-thumb { width: 100%; height: 96px; object-fit: cover; display: block; cursor: pointer; }
+    .gal-info { padding: 7px 10px 4px; }
+    .gal-time { font-size: 11px; color: var(--muted); }
+    .gal-dims { font-size: 11px; color: var(--muted); font-family: monospace; }
+    .gal-sp-link { font-size: 10px; color: var(--green); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; margin-top: 2px; }
+    .gal-sp-link a { color: var(--green); text-decoration: none; }
+    .gal-sp-link a:hover { text-decoration: underline; }
+    .gal-btns { display: flex; gap: 4px; padding: 5px 8px 8px; }
+    .gal-btn { flex: 1; padding: 5px 3px; border: 1px solid var(--border); border-radius: 4px; background: none; cursor: pointer; font-size: 10px; font-family: inherit; transition: background 0.1s; }
+    .gal-btn:hover { background: var(--blue-lt); border-color: var(--blue); color: var(--blue); }
+    .gal-btn.green:hover { background: var(--green-lt); border-color: var(--green); color: var(--green); }
+
+    /* ── Toast ── */
+    #toast {
+      position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%);
+      background: #1a1a1a; color: #fff; padding: 10px 22px; border-radius: 20px;
+      font-size: 13px; font-weight: 500; opacity: 0; transition: opacity 0.2s;
+      pointer-events: none; z-index: 99999; white-space: nowrap;
+    }
+    #toast.show { opacity: 1; }
+  </style>
+</head>
+<body>
+
+<!-- ════════════════ WELCOME ════════════════ -->
+<div id="welcome-screen" class="screen active">
+  <div class="welcome-card">
+    <div class="welcome-header">
+      <div class="welcome-header-left">
+        <div class="welcome-header-icon">📸</div>
+        <div>
+          <div class="welcome-header-title">Evidence Screenshot Tool</div>
+          <div class="welcome-header-sub">Capture · Crop · Share</div>
+        </div>
+      </div>
+      <button id="settings-btn">⚙️ Setup</button>
+    </div>
+    <div class="welcome-body">
+      <p class="welcome-sub">Capture screenshots and get shareable SharePoint links — no extension or install required.</p>
+      <div class="steps">
+        <div class="step">
+          <div class="step-num">1</div>
+          <div class="step-label">Start Capture</div>
+          <div class="step-desc">Click below and pick the browser tab to capture.</div>
+        </div>
+        <div class="step">
+          <div class="step-num">2</div>
+          <div class="step-label">Select Area</div>
+          <div class="step-desc">Drag to draw a rectangle over the exact area needed.</div>
+        </div>
+        <div class="step">
+          <div class="step-num">3</div>
+          <div class="step-label">Get Link</div>
+          <div class="step-desc">Upload via Power Automate and copy the SharePoint link.</div>
+        </div>
+      </div>
+      <div id="flow-status-banner"></div>
+      <button id="start-btn" class="btn-primary">✂️ &nbsp;Start Capture</button>
+      <p class="tip">Tip: Open this tool in one window, keep the evidence page in another.</p>
+    </div>
+  </div>
+</div>
+
+
+<!-- ════════════════ SETTINGS MODAL ════════════════ -->
+<div id="settings-modal">
+  <div class="settings-box">
+    <div class="settings-header">
+      <h2>⚙️ Flow Setup</h2>
+      <button class="settings-close" id="settings-close-btn">✕</button>
+    </div>
+    <div class="settings-body">
+      <div class="settings-note">
+        📌 <strong>One-time setup:</strong> Paste the HTTP POST URL from your Power Automate flow below.
+        Screenshots will be uploaded to SharePoint via the flow and a shareable link will be returned.
+        This works from any location — no SharePoint hosting required.
+      </div>
+      <div class="field">
+        <label for="flow-url-input">Power Automate Flow URL</label>
+        <input type="url" id="flow-url-input" placeholder="https://prod-xx.westus.logic.azure.com:443/workflows/..." />
+        <div class="field-hint">
+          In Power Automate, open your flow → click the <strong>manual (HTTP trigger)</strong> card →
+          copy the <strong>HTTP POST URL</strong> and paste it here.<br>
+          The URL starts with <code>https://</code> and is very long.
+        </div>
+      </div>
+    </div>
+    <div class="settings-footer">
+      <button class="btn-secondary" id="settings-cancel-btn">Cancel</button>
+      <button class="btn-primary" id="settings-save-btn" style="width:auto; padding:10px 24px;">Save</button>
+    </div>
+  </div>
+</div>
+
+
+<!-- ════════════════ SELECTION ════════════════ -->
+<div id="selection-screen" class="screen">
+  <canvas id="sel-canvas"></canvas>
+  <div id="sel-hint">Click and drag to select an area &nbsp;·&nbsp; ESC to cancel</div>
+  <div id="sel-dims"></div>
+</div>
+
+
+<!-- ════════════════ RESULT ════════════════ -->
+<div id="result-screen" class="screen">
+  <div class="result-card">
+    <div class="result-header">
+      <div>
+        <div class="result-title">✅ Screenshot ready</div>
+        <div class="result-meta" id="result-meta"></div>
+      </div>
+      <button class="btn-secondary" id="new-cap-btn">+ New Capture</button>
+    </div>
+    <div class="result-img-wrap"><img id="result-img" src="" alt="Screenshot" /></div>
+
+    <!-- Actions row -->
+    <div class="result-actions">
+      <button class="btn-primary" id="copy-img-btn">📋 Copy Image</button>
+      <button class="btn-secondary" id="dl-btn">⬇ Download PNG</button>
+      <button class="btn-green" id="upload-sp-btn">🔗 Upload &amp; Get Link</button>
+    </div>
+
+    <!-- Uploading indicator -->
+    <div id="sp-uploading">
+      <div class="spinner"></div>
+      <span>Uploading to SharePoint via Power Automate…</span>
+    </div>
+
+    <!-- Success: link row -->
+    <div id="sp-link-row">
+      <span class="sp-link-label">🔗 SharePoint link:</span>
+      <input id="sp-link-text" type="text" readonly />
+      <button id="sp-copy-link-btn">Copy Link</button>
+    </div>
+
+    <!-- Error row -->
+    <div id="sp-error">
+      <span id="sp-error-msg"></span>
+      <button class="btn-secondary" id="sp-retry-btn" style="font-size:12px; padding:5px 12px;">Retry</button>
+    </div>
+  </div>
+
+  <div id="gallery-section">
+    <div class="gallery-bar">
+      <span class="gallery-label">This Session</span>
+      <button id="gal-clear">Clear all</button>
+    </div>
+    <div id="gallery-grid"></div>
+  </div>
+</div>
+
+<div id="toast"></div>
+
+<!-- ════════════════ SCRIPT ════════════════ -->
+<script>
+'use strict';
+
+// ── State ──────────────────────────────────────────────────────────────────────
+let croppedDataURL = null;
+const gallery = [];
+
+// ── Flow settings (persisted in localStorage) ─────────────────────────────────
+const FLOW = {
+  get url()         { return localStorage.getItem('est_flow_url') || ''; },
+  set url(v)        { localStorage.setItem('est_flow_url', v.trim()); },
+  get configured()  { return !!this.url; }
+};
+
+// ── Helpers ────────────────────────────────────────────────────────────────────
+function show(id) {
+  document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
+  document.getElementById(id).classList.add('active');
+}
+function toast(msg, ms = 2800) {
+  const el = document.getElementById('toast');
+  el.textContent = msg; el.classList.add('show');
+  setTimeout(() => el.classList.remove('show'), ms);
+}
+
+// ── Flow Status Banner ─────────────────────────────────────────────────────────
+function updateStatusBanner() {
+  const b = document.getElementById('flow-status-banner');
+  if (!FLOW.configured) {
+    b.className = 'not-configured';
+    b.innerHTML = '⚙️ <strong>Flow URL not set up yet.</strong> Click "Setup" above to paste your Power Automate URL. You can still Copy Image and Download without it.';
+    b.style.display = 'block';
+  } else {
+    b.className = 'configured';
+    b.innerHTML = '✅ <strong>Power Automate flow configured.</strong> Screenshots will upload to SharePoint and return a shareable link.';
+    b.style.display = 'block';
+  }
+}
+
+// ── Welcome ────────────────────────────────────────────────────────────────────
+updateStatusBanner();
+document.getElementById('start-btn').addEventListener('click', doCapture);
+document.getElementById('new-cap-btn').addEventListener('click', () => {
+  updateStatusBanner();
+  show('welcome-screen');
+});
+
+// ── Settings modal ─────────────────────────────────────────────────────────────
+function openSettings() {
+  document.getElementById('flow-url-input').value = FLOW.url;
+  document.getElementById('settings-modal').classList.add('open');
+}
+function closeSettings() {
+  document.getElementById('settings-modal').classList.remove('open');
+}
+document.getElementById('settings-btn').addEventListener('click', openSettings);
+document.getElementById('settings-close-btn').addEventListener('click', closeSettings);
+document.getElementById('settings-cancel-btn').addEventListener('click', closeSettings);
+document.getElementById('settings-modal').addEventListener('click', e => {
+  if (e.target === document.getElementById('settings-modal')) closeSettings();
+});
+document.getElementById('settings-save-btn').addEventListener('click', () => {
+  const url = document.getElementById('flow-url-input').value.trim();
+  if (!url) { alert('Please paste your Power Automate Flow URL.'); return; }
+  try { new URL(url); } catch { alert('Please enter a valid URL starting with https://'); return; }
+  FLOW.url = url;
+  closeSettings();
+  updateStatusBanner();
+  toast('✅ Flow URL saved — ready to upload!');
+});
+
+// ── Capture ────────────────────────────────────────────────────────────────────
+async function doCapture() {
+  const btn = document.getElementById('start-btn');
+  btn.disabled = true; btn.textContent = '⏳  Waiting for screen share…';
+  try {
+    const stream = await navigator.mediaDevices.getDisplayMedia({
+      video: { cursor: 'always', displaySurface: 'browser' }, audio: false
+    });
+    const vid = document.createElement('video');
+    vid.srcObject = stream; vid.muted = true;
+    await new Promise(res => { vid.onloadedmetadata = () => { vid.play(); res(); }; });
+    await new Promise(res => requestAnimationFrame(() => requestAnimationFrame(res)));
+    const fc = document.createElement('canvas');
+    fc.width = vid.videoWidth; fc.height = vid.videoHeight;
+    fc.getContext('2d').drawImage(vid, 0, 0);
+    stream.getTracks().forEach(t => t.stop());
+    startSelection(fc);
+  } catch (err) {
+    if (err.name !== 'NotAllowedError') toast('❌ Capture failed: ' + err.message, 4000);
+  } finally {
+    btn.disabled = false; btn.innerHTML = '✂️ &nbsp;Start Capture';
+  }
+}
+
+// ── Selection ──────────────────────────────────────────────────────────────────
+function startSelection(src) {
+  show('selection-screen');
+  const canvas = document.getElementById('sel-canvas');
+  const dimsEl = document.getElementById('sel-dims');
+  const hintEl = document.getElementById('sel-hint');
+  const ctx = canvas.getContext('2d');
+  canvas.width = window.innerWidth; canvas.height = window.innerHeight;
+  const scale = Math.min(canvas.width / src.width, canvas.height / src.height);
+  const dw = src.width * scale, dh = src.height * scale;
+  const ox = (canvas.width - dw) / 2, oy = (canvas.height - dh) / 2;
+
+  ctx.fillStyle = '#111'; ctx.fillRect(0, 0, canvas.width, canvas.height);
+  ctx.drawImage(src, ox, oy, dw, dh);
+  ctx.fillStyle = 'rgba(0,0,0,0.45)'; ctx.fillRect(0, 0, canvas.width, canvas.height);
+  const dimmed = ctx.getImageData(0, 0, canvas.width, canvas.height);
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+  ctx.fillStyle = '#111'; ctx.fillRect(0, 0, canvas.width, canvas.height);
+  ctx.drawImage(src, ox, oy, dw, dh);
+  const bright = ctx.getImageData(0, 0, canvas.width, canvas.height);
+  ctx.putImageData(dimmed, 0, 0);
+
+  function redraw(x, y, w, h) {
+    ctx.putImageData(dimmed, 0, 0);
+    if (w <= 0 || h <= 0) return;
+    ctx.putImageData(bright, 0, 0, x, y, w, h);
+    ctx.strokeStyle = '#0078d4'; ctx.lineWidth = 2;
+    ctx.strokeRect(x + 1, y + 1, w - 2, h - 2);
+    ctx.fillStyle = '#0078d4';
+    [[x,y],[x+w,y],[x,y+h],[x+w,y+h]].forEach(([cx,cy]) => ctx.fillRect(cx-4, cy-4, 8, 8));
+  }
+
+  let sx, sy, dragging = false;
+  function onDown(e) { if (e.button !== 0) return; e.preventDefault(); dragging = true; sx = e.clientX; sy = e.clientY; hintEl.style.opacity = '0'; }
+  function onMove(e) {
+    if (!dragging) return;
+    const x = Math.min(e.clientX, sx), y = Math.min(e.clientY, sy);
+    const w = Math.abs(e.clientX - sx), h = Math.abs(e.clientY - sy);
+    redraw(x, y, w, h);
+    dimsEl.style.display = 'block';
+    dimsEl.style.left = (e.clientX + 14) + 'px'; dimsEl.style.top = (e.clientY + 14) + 'px';
+    dimsEl.textContent = Math.round(w/scale) + ' × ' + Math.round(h/scale) + ' px';
+  }
+  function onUp(e) {
+    if (!dragging) return; dragging = false;
+    dimsEl.style.display = 'none'; hintEl.style.opacity = '1';
+    const x = Math.min(e.clientX, sx), y = Math.min(e.clientY, sy);
+    const w = Math.abs(e.clientX - sx), h = Math.abs(e.clientY - sy);
+    cleanup();
+    if (w < 10 || h < 10) { show('welcome-screen'); return; }
+    const cropX = Math.max(0, (x - ox) / scale), cropY = Math.max(0, (y - oy) / scale);
+    const cropW = Math.min(w / scale, src.width - cropX), cropH = Math.min(h / scale, src.height - cropY);
+    const cc = document.createElement('canvas');
+    cc.width = Math.round(cropW); cc.height = Math.round(cropH);
+    cc.getContext('2d').drawImage(src, Math.round(cropX), Math.round(cropY), Math.round(cropW), Math.round(cropH), 0, 0, Math.round(cropW), Math.round(cropH));
+    showResult(cc.toDataURL('image/png'), Math.round(cropW), Math.round(cropH));
+  }
+  function onKey(e) { if (e.key === 'Escape') { cleanup(); show('welcome-screen'); } }
+  function cleanup() {
+    canvas.removeEventListener('mousedown', onDown); canvas.removeEventListener('mousemove', onMove);
+    canvas.removeEventListener('mouseup', onUp); document.removeEventListener('keydown', onKey);
+  }
+  canvas.addEventListener('mousedown', onDown); canvas.addEventListener('mousemove', onMove);
+  canvas.addEventListener('mouseup', onUp); document.addEventListener('keydown', onKey);
+}
+
+// ── Result ─────────────────────────────────────────────────────────────────────
+function showResult(dataURL, w, h) {
+  croppedDataURL = dataURL;
+  document.getElementById('result-img').src = dataURL;
+  document.getElementById('result-meta').textContent =
+    w + ' × ' + h + ' px  ·  ' + new Date().toLocaleTimeString([], {hour:'2-digit', minute:'2-digit', second:'2-digit'});
+  // Reset rows
+  document.getElementById('sp-uploading').classList.remove('show');
+  document.getElementById('sp-link-row').classList.remove('show');
+  document.getElementById('sp-error').classList.remove('show');
+  // Update upload button
+  const spBtn = document.getElementById('upload-sp-btn');
+  if (!FLOW.configured) {
+    spBtn.title = 'Paste your Power Automate URL first (⚙️ Setup)';
+    spBtn.style.opacity = '0.6';
+  } else {
+    spBtn.title = ''; spBtn.style.opacity = '';
+  }
+  gallery.unshift({ dataURL, w, h, ts: Date.now(), spLink: null });
+  renderGallery();
+  show('result-screen');
+}
+
+// Copy image to clipboard
+document.getElementById('copy-img-btn').addEventListener('click', async () => {
+  try {
+    const blob = await (await fetch(croppedDataURL)).blob();
+    await navigator.clipboard.write([new ClipboardItem({ 'image/png': blob })]);
+    toast('✅ Image copied to clipboard!');
+    const btn = document.getElementById('copy-img-btn');
+    btn.innerHTML = '✓ Copied!'; btn.style.background = 'var(--green)';
+    setTimeout(() => { btn.innerHTML = '📋 Copy Image'; btn.style.background = ''; }, 2200);
+  } catch (err) {
+    toast('❌ Copy failed — try Download instead.', 4000);
+  }
+});
+
+// Download PNG
+document.getElementById('dl-btn').addEventListener('click', () => {
+  const a = document.createElement('a');
+  a.download = 'evidence-' + Date.now() + '.png'; a.href = croppedDataURL; a.click();
+  toast('⬇ Download started');
+});
+
+// Upload via Power Automate
+document.getElementById('upload-sp-btn').addEventListener('click', () => doFlowUpload(croppedDataURL, 0));
+document.getElementById('sp-retry-btn').addEventListener('click', () => doFlowUpload(croppedDataURL, 0));
+
+async function doFlowUpload(dataURL, galleryIdx) {
+  if (!FLOW.configured) {
+    openSettings();
+    return;
+  }
+  document.getElementById('sp-uploading').classList.add('show');
+  document.getElementById('sp-link-row').classList.remove('show');
+  document.getElementById('sp-error').classList.remove('show');
+  document.getElementById('upload-sp-btn').disabled = true;
+
+  try {
+    const link = await uploadViaFlow(dataURL, FLOW.url);
+    // Store link in gallery
+    if (gallery.length > galleryIdx) gallery[galleryIdx].spLink = link;
+    // Show link row
+    document.getElementById('sp-link-text').value = link;
+    document.getElementById('sp-uploading').classList.remove('show');
+    document.getElementById('sp-link-row').classList.add('show');
+    renderGallery();
+    toast('✅ Uploaded! SharePoint link ready.', 3000);
+  } catch (err) {
+    document.getElementById('sp-uploading').classList.remove('show');
+    document.getElementById('sp-error-msg').textContent = '❌ ' + err.message;
+    document.getElementById('sp-error').classList.add('show');
+  } finally {
+    document.getElementById('upload-sp-btn').disabled = false;
+  }
+}
+
+// Copy SharePoint link
+document.getElementById('sp-copy-link-btn').addEventListener('click', async () => {
+  const link = document.getElementById('sp-link-text').value;
+  try {
+    await navigator.clipboard.writeText(link);
+    const btn = document.getElementById('sp-copy-link-btn');
+    btn.textContent = '✓ Copied!';
+    setTimeout(() => { btn.textContent = 'Copy Link'; }, 2200);
+    toast('✅ Link copied!');
+  } catch { toast('❌ Copy failed'); }
+});
+
+// ── Power Automate Upload ──────────────────────────────────────────────────────
+async function uploadViaFlow(dataURL, flowUrl) {
+  const base64 = dataURL.split(',')[1];
+  const filename = 'evidence-' + Date.now() + '.png';
+
+  let res;
+  try {
+    res = await fetch(flowUrl, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ imageBase64: base64, filename })
+    });
+  } catch (err) {
+    throw new Error('Could not reach the flow. Check your internet connection and flow URL in ⚙️ Setup. (' + err.message + ')');
+  }
+
+  if (res.status === 404) {
+    throw new Error('Flow not found (404). The URL may be wrong or the flow may be disabled. Check ⚙️ Setup.');
+  }
+  if (res.status === 400) {
+    let detail = '';
+    try { const j = await res.json(); detail = JSON.stringify(j); } catch {}
+    throw new Error('Flow returned a bad request (400). Check your flow logic. ' + detail);
+  }
+  if (!res.ok) {
+    throw new Error('Flow returned HTTP ' + res.status + '. Check the flow run history in Power Automate.');
+  }
+
+  let data;
+  try { data = await res.json(); }
+  catch { throw new Error('Flow did not return valid JSON. Check your Response action Body expression.'); }
+
+  const url = data.url || data.webUrl || data.shareUrl || data.link;
+  if (!url) {
+    throw new Error('Flow responded but did not include a URL. Got: ' + JSON.stringify(data).slice(0, 200));
+  }
+  return url;
+}
+
+// ── Gallery ────────────────────────────────────────────────────────────────────
+function renderGallery() {
+  const sec  = document.getElementById('gallery-section');
+  const grid = document.getElementById('gallery-grid');
+  if (gallery.length < 2) { sec.style.display = 'none'; return; }
+  sec.style.display = ''; grid.innerHTML = '';
+  gallery.forEach((shot, idx) => {
+    const d = document.createElement('div'); d.className = 'gal-item';
+    const spLinkHtml = shot.spLink
+      ? '<div class="gal-sp-link">🔗 <a href="' + shot.spLink + '" target="_blank">SharePoint link</a></div>'
+      : '';
+    d.innerHTML = `
+      <img class="gal-thumb" src="${shot.dataURL}" title="Click to view" />
+      <div class="gal-info">
+        <div class="gal-time">${new Date(shot.ts).toLocaleTimeString([],{hour:'2-digit',minute:'2-digit',second:'2-digit'})}</div>
+        <div class="gal-dims">${shot.w} × ${shot.h} px</div>
+        ${spLinkHtml}
+      </div>
+      <div class="gal-btns">
+        <button class="gal-btn gal-copy-img" title="Copy image">Copy Img</button>
+        ${shot.spLink
+          ? '<button class="gal-btn green gal-copy-link" title="Copy SharePoint link">Copy Link</button>'
+          : '<button class="gal-btn green gal-upload" title="Upload via flow">Get Link</button>'}
+        <button class="gal-btn gal-dl" title="Download">Save</button>
+      </div>`;
+    d.querySelector('.gal-thumb').addEventListener('click', () => showResult(shot.dataURL, shot.w, shot.h));
+    d.querySelector('.gal-copy-img').addEventListener('click', async e => {
+      e.stopPropagation();
+      try { const blob = await (await fetch(shot.dataURL)).blob(); await navigator.clipboard.write([new ClipboardItem({'image/png':blob})]); toast('✅ Copied!'); }
+      catch { toast('❌ Copy failed'); }
+    });
+    const linkOrUpload = d.querySelector('.gal-copy-link, .gal-upload');
+    if (linkOrUpload) {
+      linkOrUpload.addEventListener('click', async e => {
+        e.stopPropagation();
+        if (shot.spLink) {
+          await navigator.clipboard.writeText(shot.spLink); toast('✅ Link copied!');
+        } else {
+          if (!FLOW.configured) { openSettings(); return; }
+          linkOrUpload.disabled = true; linkOrUpload.textContent = '⏳';
+          try {
+            const link = await uploadViaFlow(shot.dataURL, FLOW.url);
+            shot.spLink = link;
+            await navigator.clipboard.writeText(link);
+            toast('✅ Uploaded & link copied!');
+            renderGallery();
+          } catch (err) { toast('❌ ' + err.message, 4000); linkOrUpload.disabled = false; linkOrUpload.textContent = 'Get Link'; }
+        }
+      });
+    }
+    d.querySelector('.gal-dl').addEventListener('click', e => {
+      e.stopPropagation(); const a = document.createElement('a'); a.download = 'evidence-' + shot.ts + '.png'; a.href = shot.dataURL; a.click();
+    });
+    grid.appendChild(d);
+  });
+}
+
+document.getElementById('gal-clear').addEventListener('click', () => {
+  if (!confirm('Clear all screenshots from this session?')) return;
+  gallery.length = 0; renderGallery();
+});
+</script>
+</body>
+</html>
